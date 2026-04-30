@@ -237,23 +237,25 @@
     </div>
 
     <script>
-        // Basketball Physics Engine
+        // Basketball Physics Engine with realistic gravity
         class Basketball {
             constructor(element) {
                 this.element = element;
                 this.x = window.innerWidth / 2;
-                this.y = window.innerHeight / 2;
+                this.y = 100; // Start at top to show gravity
                 this.vx = 0; // velocity x
                 this.vy = 0; // velocity y
                 this.radius = 30; // half of 60px width
-                this.gravity = 0.5;
-                this.friction = 0.99;
-                this.bounce = 0.8;
+                this.gravity = 0.6; // Stronger gravity
+                this.airFriction = 0.99; // Air resistance
+                this.groundFriction = 0.95; // Ground friction when bouncing
+                this.bounceDamping = 0.82; // Energy loss on bounce
                 this.isDragging = false;
                 this.dragStartX = 0;
                 this.dragStartY = 0;
                 this.lastX = this.x;
                 this.lastY = this.y;
+                this.onGround = false;
 
                 this.init();
             }
@@ -272,13 +274,14 @@
 
             startDrag(e) {
                 this.isDragging = true;
-                const rect = this.element.getBoundingClientRect();
                 const clientX = e.touches ? e.touches[0].clientX : e.clientX;
                 const clientY = e.touches ? e.touches[0].clientY : e.clientY;
                 this.dragStartX = clientX;
                 this.dragStartY = clientY;
                 this.lastX = this.x;
                 this.lastY = this.y;
+                this.vx = 0;
+                this.vy = 0;
             }
 
             drag(e) {
@@ -304,9 +307,9 @@
                 const clientX = e.changedTouches ? e.changedTouches[0].clientX : e.clientX;
                 const clientY = e.changedTouches ? e.changedTouches[0].clientY : e.clientY;
 
-                // Calculate velocity from drag
-                this.vx = (clientX - this.dragStartX) * 0.5;
-                this.vy = (clientY - this.dragStartY) * 0.5;
+                // Calculate velocity from drag (faster throws)
+                this.vx = (clientX - this.dragStartX) * 0.8;
+                this.vy = (clientY - this.dragStartY) * 0.8;
             }
 
             animate() {
@@ -314,42 +317,50 @@
                     // Apply gravity
                     this.vy += this.gravity;
 
-                    // Apply friction
-                    this.vx *= this.friction;
-                    this.vy *= this.friction;
+                    // Apply air friction to both axes
+                    this.vx *= this.airFriction;
+                    
+                    // Cap terminal velocity
+                    if (this.vy > 15) this.vy = 15;
 
                     // Update position
                     this.x += this.vx;
                     this.y += this.vy;
 
-                    // Bounce off walls
-                    // Left wall
+                    // Collision detection and response
+                    this.onGround = false;
+
+                    // Left wall bounce
                     if (this.x - this.radius < 0) {
                         this.x = this.radius;
-                        this.vx = Math.abs(this.vx) * this.bounce;
+                        this.vx = Math.abs(this.vx) * this.bounceDamping;
                     }
 
-                    // Right wall
+                    // Right wall bounce
                     if (this.x + this.radius > window.innerWidth) {
                         this.x = window.innerWidth - this.radius;
-                        this.vx = -Math.abs(this.vx) * this.bounce;
+                        this.vx = -Math.abs(this.vx) * this.bounceDamping;
                     }
 
-                    // Bottom (floor)
-                    if (this.y + this.radius > window.innerHeight) {
+                    // Floor (bottom) bounce - most important for gravity demo
+                    if (this.y + this.radius >= window.innerHeight) {
                         this.y = window.innerHeight - this.radius;
-                        this.vy = -Math.abs(this.vy) * this.bounce;
-
-                        // Stop bouncing if velocity is very small
-                        if (Math.abs(this.vy) < 1) {
+                        this.onGround = true;
+                        
+                        // Bounce with energy loss
+                        if (Math.abs(this.vy) > 0.5) {
+                            this.vy = -Math.abs(this.vy) * this.bounceDamping;
+                            // Apply ground friction to horizontal velocity
+                            this.vx *= this.groundFriction;
+                        } else {
+                            // Come to rest on ground
                             this.vy = 0;
+                            this.vx *= this.groundFriction;
+                            // Stop rolling if very slow
+                            if (Math.abs(this.vx) < 0.2) {
+                                this.vx = 0;
+                            }
                         }
-                    }
-
-                    // Stop if velocity is negligible
-                    if (Math.abs(this.vx) < 0.1 && Math.abs(this.vy) < 0.1 && this.y + this.radius >= window.innerHeight - 1) {
-                        this.vx = 0;
-                        this.vy = 0;
                     }
 
                     this.updatePosition();
