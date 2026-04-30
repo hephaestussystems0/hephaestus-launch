@@ -180,6 +180,45 @@
                 padding: 20px;
             }
         }
+
+        /* Basketball styles */
+        .basketball {
+            position: fixed;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 30% 30%, #ff9900, #ff6600);
+            box-shadow: inset -2px -2px 5px rgba(0, 0, 0, 0.3), 0 8px 16px rgba(0, 0, 0, 0.2);
+            cursor: grab;
+            user-select: none;
+            z-index: 1000;
+        }
+
+        .basketball::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 2px;
+            background: black;
+            top: 50%;
+            left: 0;
+            transform: translateY(-50%);
+        }
+
+        .basketball::after {
+            content: '';
+            position: absolute;
+            width: 2px;
+            height: 100%;
+            background: black;
+            left: 50%;
+            top: 0;
+            transform: translateX(-50%);
+        }
+
+        .basketball:active {
+            cursor: grabbing;
+        }
     </style>
 </head>
 <body>
@@ -189,6 +228,8 @@
         <div class="blob blob3"></div>
     </div>
 
+    <div class="basketball" id="basketball"></div>
+
     <div class="container">
         <h1>Hephaestus Systems<br>starts business today!</h1>
         <p class="subtitle">Automation • Innovation • Excellence</p>
@@ -196,6 +237,139 @@
     </div>
 
     <script>
+        // Basketball Physics Engine
+        class Basketball {
+            constructor(element) {
+                this.element = element;
+                this.x = window.innerWidth / 2;
+                this.y = window.innerHeight / 2;
+                this.vx = 0; // velocity x
+                this.vy = 0; // velocity y
+                this.radius = 30; // half of 60px width
+                this.gravity = 0.5;
+                this.friction = 0.99;
+                this.bounce = 0.8;
+                this.isDragging = false;
+                this.dragStartX = 0;
+                this.dragStartY = 0;
+                this.lastX = this.x;
+                this.lastY = this.y;
+
+                this.init();
+            }
+
+            init() {
+                this.element.addEventListener('mousedown', (e) => this.startDrag(e));
+                this.element.addEventListener('touchstart', (e) => this.startDrag(e));
+                document.addEventListener('mousemove', (e) => this.drag(e));
+                document.addEventListener('touchmove', (e) => this.drag(e));
+                document.addEventListener('mouseup', (e) => this.endDrag(e));
+                document.addEventListener('touchend', (e) => this.endDrag(e));
+
+                this.updatePosition();
+                this.animate();
+            }
+
+            startDrag(e) {
+                this.isDragging = true;
+                const rect = this.element.getBoundingClientRect();
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                this.dragStartX = clientX;
+                this.dragStartY = clientY;
+                this.lastX = this.x;
+                this.lastY = this.y;
+            }
+
+            drag(e) {
+                if (!this.isDragging) return;
+
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+                this.x = this.lastX + (clientX - this.dragStartX);
+                this.y = this.lastY + (clientY - this.dragStartY);
+
+                // Constrain to window bounds while dragging
+                this.x = Math.max(this.radius, Math.min(window.innerWidth - this.radius, this.x));
+                this.y = Math.max(this.radius, Math.min(window.innerHeight - this.radius, this.y));
+
+                this.updatePosition();
+            }
+
+            endDrag(e) {
+                if (!this.isDragging) return;
+                this.isDragging = false;
+
+                const clientX = e.changedTouches ? e.changedTouches[0].clientX : e.clientX;
+                const clientY = e.changedTouches ? e.changedTouches[0].clientY : e.clientY;
+
+                // Calculate velocity from drag
+                this.vx = (clientX - this.dragStartX) * 0.5;
+                this.vy = (clientY - this.dragStartY) * 0.5;
+            }
+
+            animate() {
+                if (!this.isDragging) {
+                    // Apply gravity
+                    this.vy += this.gravity;
+
+                    // Apply friction
+                    this.vx *= this.friction;
+                    this.vy *= this.friction;
+
+                    // Update position
+                    this.x += this.vx;
+                    this.y += this.vy;
+
+                    // Bounce off walls
+                    // Left wall
+                    if (this.x - this.radius < 0) {
+                        this.x = this.radius;
+                        this.vx = Math.abs(this.vx) * this.bounce;
+                    }
+
+                    // Right wall
+                    if (this.x + this.radius > window.innerWidth) {
+                        this.x = window.innerWidth - this.radius;
+                        this.vx = -Math.abs(this.vx) * this.bounce;
+                    }
+
+                    // Bottom (floor)
+                    if (this.y + this.radius > window.innerHeight) {
+                        this.y = window.innerHeight - this.radius;
+                        this.vy = -Math.abs(this.vy) * this.bounce;
+
+                        // Stop bouncing if velocity is very small
+                        if (Math.abs(this.vy) < 1) {
+                            this.vy = 0;
+                        }
+                    }
+
+                    // Stop if velocity is negligible
+                    if (Math.abs(this.vx) < 0.1 && Math.abs(this.vy) < 0.1 && this.y + this.radius >= window.innerHeight - 1) {
+                        this.vx = 0;
+                        this.vy = 0;
+                    }
+
+                    this.updatePosition();
+                }
+
+                requestAnimationFrame(() => this.animate());
+            }
+
+            updatePosition() {
+                this.element.style.left = (this.x - this.radius) + 'px';
+                this.element.style.top = (this.y - this.radius) + 'px';
+            }
+        }
+
+        // Initialize basketball when page loads
+        window.addEventListener('load', () => {
+            const ballElement = document.getElementById('basketball');
+            new Basketball(ballElement);
+        });
+
         // Create random sparkles
         function createSparkle() {
             const sparkle = document.createElement('div');
